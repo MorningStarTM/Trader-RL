@@ -190,12 +190,13 @@ class RLSeq2Seq(nn.Module):
             with torch.no_grad():
                 state = torch.FloatTensor(state).to(self.device)
                 hidden_state, _ = self.encoder(state.unsqueeze(0).unsqueeze(0))
-                action, action_logprob, state_val = self.policy_old.act(hidden_state)
+                action, action_logprob, state_val, next_state_pred = self.policy_old.act(hidden_state)
 
             self.buffer.states.append(state)
             self.buffer.actions.append(action)
             self.buffer.logprobs.append(action_logprob)
             self.buffer.state_values.append(state_val)
+            self.buffer.next_state_preds.append(next_state_pred)
 
             return action.detach().cpu().numpy().flatten()
         else:
@@ -215,6 +216,7 @@ class RLSeq2Seq(nn.Module):
             self.buffer.actions.append(action.detach())
             self.buffer.logprobs.append(action_logprob.detach())
             self.buffer.state_values.append(state_val.detach())
+            self.buffer.next_state_preds.append(next_state_pred)
 
             return action.item(), prev_context.squeeze(0).cpu().numpy() if prev_context is not None else None
         
@@ -249,7 +251,7 @@ class RLSeq2Seq(nn.Module):
         for _ in range(self.K_epochs):
 
             # Evaluating old actions and values
-            logprobs, state_values, dist_entropy = self.evaluate(old_states, old_actions, old_prev_contexts)
+            logprobs, state_values, dist_entropy, _ = self.evaluate(old_states, old_actions, old_prev_contexts)
 
             # match state_values tensor dimensions with rewards tensor
             state_values = torch.squeeze(state_values)
@@ -270,7 +272,10 @@ class RLSeq2Seq(nn.Module):
             # take gradient step
             self.optimizer.zero_grad()
             loss.mean().backward()
-            torch.nn.utils.clip_grad_norm_(self.decoder.parameters(), max_norm=0.5)
+            torch.nn.utils.clip_grad_norm_(
+            list(self.encoder.parameters()) + list(self.decoder.parameters()),
+            max_norm=0.5
+        )
 
             self.optimizer.step()
             
