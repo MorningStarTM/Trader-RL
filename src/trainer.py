@@ -272,8 +272,8 @@ class Seq2SeqTrainer:
         logger.info("Total training time  : ", end_time - start_time)
         logger.info("============================================================================================")
 
-        np.save(os.path.join(self.reward_folder, f"seq2seqBasic_{self.env_name}_{self.config['horizon']}_step_rewards.npy"), np.array(self.step_rewards))
-        np.save(os.path.join(self.reward_folder, f"seq2seqBasic_{self.env_name}_{self.config['horizon']}_episode_rewards.npy"), np.array(self.episode_rewards))
+        np.save(os.path.join(self.reward_folder, f"seq2seqBasic_{self.env_name}_step_rewards.npy"), np.array(self.step_rewards))
+        np.save(os.path.join(self.reward_folder, f"seq2seqBasic_{self.env_name}_episode_rewards.npy"), np.array(self.episode_rewards))
         logger.info(f"Saved step_rewards and episode_rewards to {self.log_dir}")
 
 
