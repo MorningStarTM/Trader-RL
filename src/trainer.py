@@ -67,6 +67,55 @@ class Seq2SeqTrainer:
             os.makedirs(self.reward_folder, exist_ok=True)
         
     
+    # --- Add these helpers near the top of trainer.py ---
+    def _get_current_price(self):
+        # Try common attributes; fall back to df+index if needed
+        for attr in ["current_price", "price", "last_price"]:
+            if hasattr(self.env, attr):
+                return float(getattr(self.env, attr))
+        # TradingEnv often has an internal tick/index
+        idx = None
+        for tick_attr in ["_current_tick", "current_step", "tick", "_i"]:
+            if hasattr(self.env, tick_attr):
+                idx = int(getattr(self.env, tick_attr))
+                break
+        # Try from env.df
+        if hasattr(self.env, "df") and idx is not None:
+            if "close" in self.env.df.columns:
+                return float(self.env.df["close"].iloc[idx])
+            if "Close" in self.env.df.columns:
+                return float(self.env.df["Close"].iloc[idx])
+        # Try from prices array
+        if hasattr(self.env, "prices"):
+            arr = getattr(self.env, "prices")
+            try:
+                return float(arr[idx])
+            except Exception:
+                return float(arr[-1])
+        raise RuntimeError("Could not infer current price from env.")
+
+    def _get_portfolio_value(self, info=None):
+        # Prefer explicit fields if the env provides them
+        for attr in ["portfolio_value", "account_value", "net_worth", "equity"]:
+            if hasattr(self.env, attr):
+                return float(getattr(self.env, attr))
+        if info and isinstance(info, dict):
+            for k in ["portfolio_value", "account_value", "net_worth", "equity"]:
+                if k in info:
+                    return float(info[k])
+        # Last resort: cash + position * price (common in trading envs)
+        cash = 0.0
+        position_qty = 0.0
+        for cash_attr in ["cash", "_cash", "balance", "_balance"]:
+            if hasattr(self.env, cash_attr):
+                cash = float(getattr(self.env, cash_attr)); break
+        for pos_attr in ["position", "_position", "inventory", "_inventory", "shares_held"]:
+            if hasattr(self.env, pos_attr):
+                position_qty = float(getattr(self.env, pos_attr)); break
+        price = self._get_current_price(self.env)
+        return cash + position_qty * price
+
+
 
     def train(self):
         start_time = datetime.now().replace(microsecond=0)
@@ -104,11 +153,11 @@ class Seq2SeqTrainer:
 
                 # select action with policy
 
-                action, new_context = self.agent.select_action(state, prev_context=prev_context)
+                action, _ = self.agent.select_action(state, prev_context=prev_context)
 
                 next_state, reward, done, _, _ = self.env.step(action)
                 self.step_rewards.append(reward)
-                self.agent.buffer.next_state.append(next_state)
+                self.agent.buffer.next_state.append(torch.as_tensor(next_state, dtype=torch.float32, device=self.agent.device).view(-1))
                 
 
                 decoder_input = None
