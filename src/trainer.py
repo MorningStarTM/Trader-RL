@@ -144,6 +144,14 @@ class Seq2SeqTrainer:
             prev_obs = None
             prev_action = None
 
+            # === initialize episode baselines ===
+            try:
+                price_0 = self._get_current_price()
+            except Exception:
+                price_0 = None
+            # snapshot portfolio at t0
+            pv_0 = self._get_portfolio_value()
+
 
             for t in range(1, self.config['max_ep_len']+1):
                 if prev_obs is not None and prev_action is not None:
@@ -155,7 +163,7 @@ class Seq2SeqTrainer:
 
                 action, _ = self.agent.select_action(state, prev_context=prev_context)
 
-                next_state, reward, done, _, _ = self.env.step(action)
+                next_state, reward, done, truncate, info = self.env.step(action)
                 self.step_rewards.append(reward)
                 self.agent.buffer.next_state.append(torch.as_tensor(next_state, dtype=torch.float32, device=self.agent.device).view(-1))
                 
@@ -180,6 +188,17 @@ class Seq2SeqTrainer:
                 else:
                     self.agent.buffer.prev_contexts.append(torch.zeros(self.config['input_dim'] + self.config['action_dim']))
 
+                try:
+                    price_t = self._get_current_price()
+                except Exception:
+                    price_t = None
+                pv_t = self._get_portfolio_value(info=info)
+
+                if price_0 is not None and price_t is not None:
+                    market_ret = (price_t / price_0 - 1.0) * 100.0
+                else:
+                    market_ret = float('nan')
+                portfolio_ret = (pv_t / pv_0 - 1.0) * 100.0 if pv_0 != 0 else float('nan')
 
 
                 prev_obs = state
@@ -217,7 +236,12 @@ class Seq2SeqTrainer:
                     print_avg_reward = print_running_reward / print_running_episodes
                     print_avg_reward = round(print_avg_reward, 2)
 
-                    logger.info("Episode : {} \t\t Timestep : {} \t\t Average Reward : {}".format(i_episode, time_step, print_avg_reward))
+                    logger.info(
+                        f"Episode: {i_episode}  Step: {time_step}  "
+                        f"AvgR: {print_avg_reward:.2f}  "
+                        f"MarketRet: {market_ret:.2f}%  "
+                        f"PortfolioRet: {portfolio_ret:.2f}%"
+                    )
 
                     print_running_reward = 0
                     print_running_episodes = 0
