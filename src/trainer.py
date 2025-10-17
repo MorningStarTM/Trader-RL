@@ -68,52 +68,41 @@ class Seq2SeqTrainer:
         
     
     # --- Add these helpers near the top of trainer.py ---
-    def _get_current_price(self):
-        # Try common attributes; fall back to df+index if needed
-        for attr in ["current_price", "price", "last_price"]:
-            if hasattr(self.env, attr):
-                return float(getattr(self.env, attr))
-        # TradingEnv often has an internal tick/index
-        idx = None
-        for tick_attr in ["_current_tick", "current_step", "tick", "_i"]:
-            if hasattr(self.env, tick_attr):
-                idx = int(getattr(self.env, tick_attr))
-                break
-        # Try from env.df
-        if hasattr(self.env, "df") and idx is not None:
-            if "close" in self.env.df.columns:
-                return float(self.env.df["close"].iloc[idx])
-            if "Close" in self.env.df.columns:
-                return float(self.env.df["Close"].iloc[idx])
-        # Try from prices array
-        if hasattr(self.env, "prices"):
-            arr = getattr(self.env, "prices")
-            try:
-                return float(arr[idx])
-            except Exception:
-                return float(arr[-1])
-        raise RuntimeError("Could not infer current price from env.")
-
-    def _get_portfolio_value(self, info=None):
-        # Prefer explicit fields if the env provides them
-        for attr in ["portfolio_value", "account_value", "net_worth", "equity"]:
-            if hasattr(self.env, attr):
-                return float(getattr(self.env, attr))
+    def get_current_price(self, info=None, default=np.nan):
+        # Prefer info dict (your env provides data_close)
         if info and isinstance(info, dict):
-            for k in ["portfolio_value", "account_value", "net_worth", "equity"]:
+            if "data_close" in info:
+                return float(info["data_close"])
+            for k in ("price", "close", "last_price", "current_price"):
                 if k in info:
-                    return float(info[k])
-        # Last resort: cash + position * price (common in trading envs)
-        cash = 0.0
-        position_qty = 0.0
-        for cash_attr in ["cash", "_cash", "balance", "_balance"]:
-            if hasattr(self.env, cash_attr):
-                cash = float(getattr(self.env, cash_attr)); break
-        for pos_attr in ["position", "_position", "inventory", "_inventory", "shares_held"]:
-            if hasattr(self.env, pos_attr):
-                position_qty = float(getattr(self.env, pos_attr)); break
-        price = self._get_current_price(self.env)
-        return cash + position_qty * price
+                    try: return float(info[k])
+                    except: pass
+
+        # Fallbacks (only used if info missing)
+        for attr in ("current_price", "price", "last_price"):
+            if hasattr(self.env, attr):
+                try: return float(getattr(self.env, attr))
+                except: pass
+
+        # df/array fallbacks (optional)
+        return default
+
+
+    def get_portfolio_value(self, info=None, default=np.nan):
+        # Prefer info dict (your env provides portfolio_valuation)
+        if info and isinstance(info, dict):
+            for k in ("portfolio_valuation", "portfolio_value", "account_value", "net_worth", "equity"):
+                if k in info:
+                    try: return float(info[k])
+                    except: pass
+
+        # Fallbacks if not in info
+        for attr in ("portfolio_value", "account_value", "net_worth", "equity"):
+            if hasattr(self.env, attr):
+                try: return float(getattr(self.env, attr))
+                except: pass
+
+        return default
 
 
 
@@ -139,18 +128,18 @@ class Seq2SeqTrainer:
         
         while time_step <= self.config['max_training_timesteps']:
 
-            state, _ = self.env.reset()
+            state, info = self.env.reset()
             current_ep_reward = 0
             prev_obs = None
             prev_action = None
 
             # === initialize episode baselines ===
             try:
-                price_0 = self._get_current_price()
+                price_0 = self.get_current_price(info=info)
             except Exception:
                 price_0 = None
             # snapshot portfolio at t0
-            pv_0 = self._get_portfolio_value()
+            pv_0 = self.get_portfolio_value(info=info)
 
 
             for t in range(1, self.config['max_ep_len']+1):
@@ -189,10 +178,10 @@ class Seq2SeqTrainer:
                     self.agent.buffer.prev_contexts.append(torch.zeros(self.config['input_dim'] + self.config['action_dim']))
 
                 try:
-                    price_t = self._get_current_price()
+                    price_t = self.get_current_price(info=info)
                 except Exception:
                     price_t = None
-                pv_t = self._get_portfolio_value(info=info)
+                pv_t = self.get_portfolio_value(info=info)
 
                 if price_0 is not None and price_t is not None:
                     market_ret = (price_t / price_0 - 1.0) * 100.0
