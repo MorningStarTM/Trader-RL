@@ -207,33 +207,26 @@ class Seq2SeqTrainer:
 
                 # log in logging file
                 if time_step % self.config['log_freq'] == 0:
+                    if log_running_episodes > 0:
+                        log_avg_reward = log_running_reward / log_running_episodes
+                        log_f.write(f'{i_episode},{time_step},{log_avg_reward:.4f}\n')
+                        log_f.flush()
+                        log_running_reward = 0.0
+                        log_running_episodes = 0
+                    # else: no episode finished yet, skip logging this tick
 
-                    # log average reward till last episode
-                    log_avg_reward = log_running_reward / log_running_episodes
-                    log_avg_reward = round(log_avg_reward, 4)
-
-                    log_f.write('{},{},{}\n'.format(i_episode, time_step, log_avg_reward))
-                    log_f.flush()
-
-                    log_running_reward = 0
-                    log_running_episodes = 0
-
-                # printing average reward
+                # ---- printing average reward ----
                 if time_step % self.config['print_freq'] == 0:
-
-                    # print average reward till last episode
-                    print_avg_reward = print_running_reward / print_running_episodes
-                    print_avg_reward = round(print_avg_reward, 2)
-
-                    logger.info(
-                        f"Episode: {i_episode}  Step: {time_step}  "
-                        f"AvgR: {print_avg_reward:.2f}  "
-                        f"MarketRet: {market_ret:.2f}%  "
-                        f"PortfolioRet: {portfolio_ret:.2f}%"
-                    )
-
-                    print_running_reward = 0
-                    print_running_episodes = 0
+                    if print_running_episodes > 0:
+                        print_avg_reward = print_running_reward / print_running_episodes
+                        logger.info(
+                            f"Episode: {i_episode}  Step: {time_step}  "
+                            f"AvgR: {print_avg_reward:.2f}  "
+                            f"MarketRet: {market_ret:.2f}%  "
+                            f"PortfolioRet: {portfolio_ret:.2f}%"
+                        )
+                        print_running_reward = 0.0
+                        print_running_episodes = 0
 
                 # save model weights
                 if time_step % self.config['save_model_freq'] == 0:
