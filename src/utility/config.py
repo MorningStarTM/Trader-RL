@@ -1,5 +1,5 @@
 config = {
-    'state_dim': None,  # Input dimension (state space)
+    'input_dim': None,  # Input dimension (state space)
     'embedding_dim': 64,
     'n_layers': 2,
     'dropout': 0.1,
