@@ -205,7 +205,7 @@ class RLSeq2Seq(nn.Module):
                 hidden_state, _ = self.encoder(state.unsqueeze(0).unsqueeze(0))  # [1, 1, obs_dim]
                 if prev_context is not None:
                     prev_context = torch.FloatTensor(prev_context).to(self.device).unsqueeze(0)  # [1, context_dim]
-                action_logits, state_val = self.policy_old.act(hidden_state, prev_context)
+                action_logits, state_val, next_state_pred = self.policy_old.act(hidden_state, prev_context)
                 dist = Categorical(logits=action_logits)
                 action = dist.sample()
                 action_logprob = dist.log_prob(action)
