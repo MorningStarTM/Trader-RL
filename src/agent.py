@@ -287,16 +287,30 @@ class RLSeq2Seq(nn.Module):
 
 
 
-    def save_models(self, checkpoint=f"models/seq2seq"):
+    def save_models(self, checkpoint: str = "models/seq2seq"):
         os.makedirs(checkpoint, exist_ok=True)
+
+        # weights
         torch.save(self.encoder.state_dict(), os.path.join(checkpoint, "encoder.pt"))
         torch.save(self.decoder.state_dict(), os.path.join(checkpoint, "decoder.pt"))
-        logger.info(f"Models saved to {checkpoint}")
 
-    def load_models(self, checkpoint="models/seq2seq"):
+        # optimizers (main + optional per-module optimizers if you actually use them)
+        optim_payload = {"optimizer": self.optimizer.state_dict()}
+        if hasattr(self.encoder, "optimizer") and isinstance(self.encoder.optimizer, torch.optim.Optimizer):
+            optim_payload["encoder_optimizer"] = self.encoder.optimizer.state_dict()
+        if hasattr(self.decoder, "optimizer") and isinstance(self.decoder.optimizer, torch.optim.Optimizer):
+            optim_payload["decoder_optimizer"] = self.decoder.optimizer.state_dict()
+
+        torch.save(optim_payload, os.path.join(checkpoint, "optim.pt"))
+        logger.info(f"Models + optimizer saved to {checkpoint}")
+
+
+    def load_models(self, checkpoint: str = "models/seq2seq"):
         encoder_path = os.path.join(checkpoint, "encoder.pt")
         decoder_path = os.path.join(checkpoint, "decoder.pt")
+        optim_path   = os.path.join(checkpoint, "optim.pt")
 
+        # weights
         if os.path.exists(encoder_path):
             self.encoder.load_state_dict(torch.load(encoder_path, map_location=self.device))
         else:
@@ -306,6 +320,30 @@ class RLSeq2Seq(nn.Module):
             self.decoder.load_state_dict(torch.load(decoder_path, map_location=self.device))
         else:
             logger.warning(f"Decoder checkpoint not found at {decoder_path}")
+
+        # optimizers (gracefully handle older checkpoints without optim.pt)
+        if os.path.exists(optim_path):
+            ckpt = torch.load(optim_path, map_location=self.device)
+            try:
+                if "optimizer" in ckpt and ckpt["optimizer"] is not None:
+                    self.optimizer.load_state_dict(ckpt["optimizer"])
+            except Exception as e:
+                logger.warning(f"Main optimizer state not loaded (shape mismatch or arch change): {e}")
+
+            # optional per-module optimizers if present
+            if "encoder_optimizer" in ckpt and hasattr(self.encoder, "optimizer"):
+                try:
+                    self.encoder.optimizer.load_state_dict(ckpt["encoder_optimizer"])
+                except Exception as e:
+                    logger.warning(f"Encoder optimizer state not loaded: {e}")
+
+            if "decoder_optimizer" in ckpt and hasattr(self.decoder, "optimizer"):
+                try:
+                    self.decoder.optimizer.load_state_dict(ckpt["decoder_optimizer"])
+                except Exception as e:
+                    logger.warning(f"Decoder optimizer state not loaded: {e}")
+        else:
+            logger.info(f"No optimizer checkpoint found at {optim_path} (loading weights only).")
 
         logger.info(f"Models loaded from {checkpoint}")
 
