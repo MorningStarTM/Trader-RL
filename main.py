@@ -1,6 +1,6 @@
 import gymnasium as gym
-from src.agent import RLSeq2Seq, Encoder, Decoder
-from src.trainer import Seq2SeqTrainer
+from src.agent import RLSeq2Seq, Encoder, Decoder, PPO
+from src.trainer import Seq2SeqTrainer, Trainer
 from src.utility.logger import logger
 from src.utility.data_prep import build_trading_features
 from src.utility.config import config
@@ -17,18 +17,38 @@ env = gym.make("TradingEnv",
         borrow_interest_rate= 0.0003/100, # 0.0003% per timestep (one timestep = 1h here)
     )
 
-logger.info(f"Environment created.")
-config['input_dim'] = env.observation_space.shape[0]
-config['action_dim'] = env.action_space.n if hasattr(env.action_space, 'n') else env.action_space.shape[0]
+def seq2seq_main():
+    logger.info(f"Environment created.")
+    config['input_dim'] = env.observation_space.shape[0]
+    config['action_dim'] = env.action_space.n if hasattr(env.action_space, 'n') else env.action_space.shape[0]
 
 
-encoder = Encoder(config)
-decoder = Decoder(config)
-trader = RLSeq2Seq(config=config, decoder=decoder, encoder=encoder)
-num_params = sum(p.numel() for p in trader.parameters() if p.requires_grad)
-logger.info(f"Agent initialized with {num_params/1e6:.3f}M trainable parameters")
+    encoder = Encoder(config)
+    decoder = Decoder(config)
+    trader = RLSeq2Seq(config=config, decoder=decoder, encoder=encoder)
+    num_params = sum(p.numel() for p in trader.parameters() if p.requires_grad)
+    logger.info(f"Agent initialized with {num_params/1e6:.3f}M trainable parameters")
 
 
-trainer = Seq2SeqTrainer(trader, env=env, env_name="stock", config=config)
-logger.info("trainer initiliazed")
-trainer.train()
+    trainer = Seq2SeqTrainer(trader, env=env, env_name="stock", config=config)
+    logger.info("trainer initiliazed")
+    trainer.train()
+
+
+
+def ppo_train():
+    config['input_dim'] = env.observation_space.shape[0]
+    config['action_dim'] = env.action_space.n if hasattr(env.action_space, 'n') else env.action_space.shape[0]
+
+    trader = PPO(config=config)
+    num_params = sum(p.numel() for p in trader.policy.parameters() if p.requires_grad)
+    logger.info(f"Agent initialized with {num_params/1e6:.3f}M trainable parameters")
+
+    trainer = Trainer(trader, env=env, env_name="stock", config=config)
+    logger.info("trainer initiliazed")
+    trainer.train()
+
+
+
+if __name__ == "__main__":
+    ppo_train()
