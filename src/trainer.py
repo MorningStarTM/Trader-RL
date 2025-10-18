@@ -400,7 +400,7 @@ class Trainer:
                 # select action with policy
 
                 action = self.agent.select_action(state)
-                state, reward, done, _, _ = self.env.step(action)
+                state, reward, done, truncate, info = self.env.step(action)
                 self.step_rewards.append(reward)
 
                 # saving reward and is_terminals
