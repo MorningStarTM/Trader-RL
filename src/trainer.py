@@ -476,6 +476,10 @@ class Trainer:
             i_episode += 1
 
         log_f.close()
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")   # e.g., 20251016-184223
+        out_dir = Path(self.log_dir) / f"ppo_render_logs_{ts}"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        self.env.save_for_render(dir = str(out_dir))
         self.env.close()
 
         # print total training time
