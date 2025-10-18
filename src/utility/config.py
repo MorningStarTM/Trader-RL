@@ -12,7 +12,7 @@ config = {
 
     # Environment settings
     'has_continuous_action_space': False,      # True: continuous action space, False: discrete
-    'max_ep_len': 1000,                       # Max timesteps per episode
+    'max_ep_len': 10000,                       # Max timesteps per episode
     'max_training_timesteps': int(3e6),       # Total training steps before stopping
     'action_std_init':0.6,
 
