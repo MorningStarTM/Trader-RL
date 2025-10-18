@@ -559,11 +559,35 @@ class PPO:
         self.buffer.clear()
     
     def save(self, checkpoint_path, filename="ppo_checkpoint.pth"):
-        torch.save(self.policy_old.state_dict(), os.path.join(checkpoint_path, filename))
+        os.makedirs(checkpoint_path, exist_ok=True)
+        ckpt = {
+            "policy": self.policy.state_dict(),
+            "policy_old": self.policy_old.state_dict(),
+            "optimizer": self.optimizer.state_dict(),
+            "config": self.config,  # optional but handy
+        }
+        torch.save(ckpt, os.path.join(checkpoint_path, filename))
    
-    def load(self, checkpoint_path, filename="ppo_checkpoint.pth"):
+    def load(self, checkpoint_path, filename="ppo_checkpoint.pth", strict: bool = True):
         file = os.path.join(checkpoint_path, filename)
-        self.policy_old.load_state_dict(torch.load(file, map_location=lambda storage, loc: storage))
-        self.policy.load_state_dict(torch.load(file, map_location=lambda storage, loc: storage))
+        ckpt = torch.load(file, map_location=self.device)
+
+        # Allow loading from old checkpoints (that only had state_dict)
+        if isinstance(ckpt, dict) and "policy" in ckpt:
+            self.policy.load_state_dict(ckpt["policy"], strict=strict)
+            self.policy_old.load_state_dict(ckpt.get("policy_old", ckpt["policy"]), strict=strict)
+
+            # Optimizer state may be missing in older files
+            opt_state = ckpt.get("optimizer", None)
+            if opt_state is not None:
+                try:
+                    self.optimizer.load_state_dict(opt_state)
+                except ValueError:
+                    # shape mismatch due to arch change; keep running without old opt state
+                    pass
+        else:
+            # Legacy: file is just a state_dict of the policy
+            self.policy.load_state_dict(ckpt, strict=strict)
+            self.policy_old.load_state_dict(ckpt, strict=strict)
 
 
