@@ -605,6 +605,7 @@ class PPO:
             "config": self.config,  # optional but handy
         }
         torch.save(ckpt, os.path.join(checkpoint_path, filename))
+        logger.info(f"PPO saved to {os.path.join(checkpoint_path, filename)}")
    
     def load(self, checkpoint_path, filename="ppo_checkpoint.pth", strict: bool = True):
         file = os.path.join(checkpoint_path, filename)
@@ -627,5 +628,7 @@ class PPO:
             # Legacy: file is just a state_dict of the policy
             self.policy.load_state_dict(ckpt, strict=strict)
             self.policy_old.load_state_dict(ckpt, strict=strict)
+
+        logger.info(f"PPO loaded from {file}")
 
 
