@@ -1,0 +1,9 @@
+gym-trading-env
+torch==2.0.1
+numpy
+pandas
+gymnasium==0.29.1
+gym
+pathlib
+tensorboard
+
