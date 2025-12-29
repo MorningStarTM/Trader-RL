@@ -50,5 +50,44 @@ def ppo_train():
 
 
 
+def ppo_eval():
+    from src.agent import PPO
+    from src.utility.config import config
+    from datetime import datetime
+    from pathlib import Path
+    import numpy as np
+
+    config['input_dim'] = env.observation_space.shape[0]
+    config['action_dim'] = env.action_space.n if hasattr(env.action_space, 'n') else env.action_space.shape[0]
+    agent = PPO(config)
+    agent.load(checkpoint_path="models\\stock")
+
+    
+
+    log_dir = "model_logs/stock"
+
+    terminated, truncated = False, False
+    obs, info = env.reset()
+    ep_rewards = []
+    cum_reward = 0.0
+
+    while not (terminated or truncated):
+        action = agent.select_action(state=obs)  # your policy here
+        obs, reward, terminated, truncated, info = env.step(action)
+        cum_reward += reward
+        ep_rewards.append(reward)
+
+
+    print(f"Episode cumulative reward: {cum_reward:.6f}")
+
+    # If you want the running cumulative reward at each step:
+    cum_rewards_per_step = np.cumsum(ep_rewards)
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")   # e.g., 20251016-184223
+    out_dir = Path(log_dir) / f"ppo_render_logs_{ts}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    env.save_for_render(dir = str(out_dir))
+    env.close()
+
+
 if __name__ == "__main__":
     ppo_train()
